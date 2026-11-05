@@ -33,6 +33,7 @@ public final class StructOptGameTests {
         FUNCTIONS.register("cache_builder_fills", () -> FeatureTests::cacheBuilderFills);
         FUNCTIONS.register("template_parallel_loads", () -> FeatureTests::templateParallelLoads);
         FUNCTIONS.register("start_cache_copy", () -> FeatureTests::startCacheCopy);
+        FUNCTIONS.register("lookahead_moving_player", () -> FeatureTests::lookaheadMovingPlayer);
         FUNCTIONS.register("height_cache_equivalence", () -> FeatureTests::heightCacheEquivalence);
         FUNCTIONS.register("spawn_probe_skips", () -> FeatureTests::spawnProbeSkips);
         FUNCTIONS.register("stats_command", () -> FeatureTests::statsCommand);

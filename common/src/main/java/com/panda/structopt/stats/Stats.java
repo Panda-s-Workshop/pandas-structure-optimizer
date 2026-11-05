@@ -23,6 +23,8 @@ public final class Stats {
     public static final LongAdder AHEAD_COMPUTED = new LongAdder();
     public static final LongAdder AHEAD_USED = new LongAdder();
     public static final LongAdder AHEAD_SCANNED = new LongAdder();
+    /** Player scans started (one per moving player per cycle). */
+    public static final LongAdder AHEAD_PLAYER_SCANS = new LongAdder();
     public static final LongAdder AHEAD_DROPPED = new LongAdder();
     public static final LongAdder PREFETCHED = new LongAdder();
     public static final LongAdder HEIGHT_HITS = new LongAdder();
@@ -95,7 +97,7 @@ public final class Stats {
 
     public static void reset() {
         for (LongAdder a : List.of(TEMPLATE_HITS, TEMPLATE_MISSES, TEMPLATE_AVOIDED_MICROS, TEMPLATE_UPGRADE_MICROS, TEMPLATE_LOADS,
-                TEMPLATE_SHARED_LOADS, START_HITS, START_MISSES, START_SHARED, START_UNSHAREABLE, AHEAD_COMPUTED, AHEAD_USED, AHEAD_SCANNED, AHEAD_DROPPED,
+                TEMPLATE_SHARED_LOADS, START_HITS, START_MISSES, START_SHARED, START_UNSHAREABLE, AHEAD_COMPUTED, AHEAD_USED, AHEAD_SCANNED, AHEAD_PLAYER_SCANS, AHEAD_DROPPED,
                 PREFETCHED, HEIGHT_HITS, HEIGHT_MISSES, SPAWN_SKIPS, COORDINATOR_BLOCKED)) a.reset();
         BUILDER_DONE.set(0);
         BUILDER_TOTAL.set(0);

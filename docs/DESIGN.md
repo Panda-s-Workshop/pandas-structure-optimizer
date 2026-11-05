@@ -33,9 +33,11 @@ In a large pack most structure time goes into three things:
 
 ### Background cache builder
 
-At server start one low-priority thread walks every template the pack can place: the template pools first, then every
-other `structure/*.nbt` in the data packs. It upgrades each one that isn't cached yet, writes only to disk, and pauses
-while structures are being generated. It stops at shutdown and carries on at the next start.
+At server start `templateCacheBuilderThreads` low-priority threads walk every template the pack can place: the template
+pools first, then every other `structure/*.nbt` in the data packs. They upgrade each one that isn't cached yet and write
+only to disk. They run on spare CPU: while the whole machine is busier than `templateCacheBuilderMaxCpu` (0 to 1) they
+wait, so they keep filling the cache while a player explores on a machine with idle cores. They stop at shutdown and carry
+on at the next start.
 
 ### Separate template loads
 
@@ -59,6 +61,7 @@ working.
 - Each player is looked at once every `lookaheadCycleTicks` ticks. The players are split round-robin into that many
   batches, one batch per tick (50 players and 10 ticks: 5 players a tick), so the work is spread out instead of landing on
   one tick.
+- A player counts as moving from the positions its client sends (the server-side velocity of a player stays zero).
 - For a moving player, the mod looks at the band of chunks just past the ones the chunk system already needs. That is the
   view distance plus the radius at which full chunks need structure starts, extended `lookaheadExtraChunks` along the
   direction of travel.
@@ -117,6 +120,7 @@ written back with its default. Not synced to clients.
 | `templateCacheMaxGigabytes` | 4 | its disk cap |
 | `templateCacheBuilder` | true | the background cache builder |
 | `templateCacheBuilderThreads` | 1 | its threads |
+| `templateCacheBuilderMaxCpu` | 0.75 | the builder waits while the machine's CPU load is above this |
 | `templateLoadsSeparate` | true | one shared load per template, outside the map |
 | `startCacheEnabled` | true | shared structure-start results |
 | `startCacheMaxMegabytes` | 64 | their memory cap |

@@ -10,6 +10,7 @@ import com.panda.structopt.height.Heights;
 import com.panda.structopt.mixin.StructureTemplateManagerAccessor;
 import com.panda.structopt.mixin.TemplateSourceAccessor;
 import com.panda.structopt.spawn.SpawnProbes;
+import com.panda.structopt.start.Lookahead;
 import com.panda.structopt.start.StartCache;
 import com.panda.structopt.stats.Stats;
 import com.panda.structopt.template.CacheBuilder;
@@ -48,6 +49,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.level.ChunkPos;
@@ -60,6 +62,7 @@ import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
@@ -240,6 +243,30 @@ final class FeatureTests {
         helper.succeed();
     }
 
+    // ---- 3.5 -------------------------------------------------------------------------------------------------------------
+
+    /**
+     * A player moved by its client: the server only receives positions, which the packet listener records as the known
+     * movement, while the server-side velocity stays zero. The lookahead must scan ahead of that player.
+     */
+    static void lookaheadMovingPlayer(GameTestHelper helper) {
+        if (!Lookahead.active()) helper.fail("the lookahead is off");
+        ServerPlayer player = helper.makeMockServerPlayerInLevel();
+        if (helper.getLevel().getServer().getPlayerList().getPlayer(player.getUUID()) == null) helper.fail("the test player isn't in the player list");
+        Vec3 step = new Vec3(0.55, 0, 0.1);
+        long before = Stats.AHEAD_PLAYER_SCANS.sum();
+        helper.onEachTick(() -> {
+            player.setDeltaMovement(Vec3.ZERO);
+            player.setKnownMovement(step);
+        });
+        helper.succeedWhen(() -> {
+            helper.assertTrue(player.getDeltaMovement().horizontalDistance() < Lookahead.MIN_SPEED, "the test player has a server-side velocity");
+            helper.assertTrue(Lookahead.movement(player).horizontalDistance() >= Lookahead.MIN_SPEED, "the lookahead doesn't see the player move");
+            helper.assertTrue(Stats.AHEAD_PLAYER_SCANS.sum() > before, "no scan started for the moving player");
+            helper.getLevel().getServer().getPlayerList().remove(player);
+        });
+    }
+
     // ---- 3.8 -------------------------------------------------------------------------------------------------------------
 
     /** During the custom spawners, a chunk that is scheduled but not generated reads as absent, at once; a full one reads as present. */
@@ -297,7 +324,7 @@ final class FeatureTests {
         StructOptConfig before = StructOptConfig.get();
         try {
             StructOptConfig d = new StructOptConfig();
-            if (!d.templateCacheEnabled || d.templateCacheMaxGigabytes != 4 || !d.templateCacheBuilder || d.templateCacheBuilderThreads != 1
+            if (!d.templateCacheEnabled || d.templateCacheMaxGigabytes != 4 || !d.templateCacheBuilder || d.templateCacheBuilderThreads != 1 || d.templateCacheBuilderMaxCpu != 0.75
                     || !d.templateLoadsSeparate || !d.startCacheEnabled || d.startCacheMaxMegabytes != 64 || !d.lookaheadEnabled
                     || d.lookaheadThreads != 0 || d.lookaheadExtraChunks != 8 || d.lookaheadCycleTicks != 10 || d.lookaheadScanCapPerTick != 256
                     || d.lookaheadQueue != 256 || !d.lookaheadPrefetchTemplates || !d.heightCacheEnabled

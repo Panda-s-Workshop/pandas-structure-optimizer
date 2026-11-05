@@ -62,6 +62,8 @@ import org.jspecify.annotations.Nullable;
  */
 public final class Lookahead {
     private static final long IDLE_NANOS = 5_000_000_000L;
+    /** Blocks per tick below which a player counts as standing still. */
+    public static final double MIN_SPEED = 0.05;
     private static volatile @Nullable Lookahead instance;
 
     private final MinecraftServer server;
@@ -145,15 +147,16 @@ public final class Lookahead {
         for (UUID id : players.batch(server.getTickCount(), config.lookaheadCycleTicks)) {
             ServerPlayer p = server.getPlayerList().getPlayer(id);
             if (p == null) continue;
-            Vec3 v = p.getDeltaMovement();
+            Vec3 v = movement(p);
             double speed = Math.sqrt(v.x * v.x + v.z * v.z);
-            if (speed < 0.05) continue;
+            if (speed < MIN_SPEED) continue;
             lastMoveNanos = now;
             ServerLevel level = p.level();
             ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
             ChunkPos c = p.chunkPosition();
             scans.addLast(new Scan(level, state.possibleStructureSets(), c.x(), c.z(), radius - 1, radius + config.lookaheadExtraChunks,
                     v.x / speed, v.z / speed));
+            Stats.AHEAD_PLAYER_SCANS.increment();
             while (scans.size() > 64) scans.removeFirst();
         }
         if (now - lastMoveNanos > IDLE_NANOS) {
@@ -167,6 +170,15 @@ public final class Lookahead {
             if (s.set >= s.sets.size()) scans.removeFirst();
         }
         if (seen.size() > 500_000) seen.clear();
+    }
+
+    /**
+     * A player's movement per tick as the server knows it. A player moves on the client and the server only receives positions,
+     * so {@code getDeltaMovement()} stays near zero for walking and flying players; the known movement is taken from those
+     * position updates (and from the vehicle when the player steers one).
+     */
+    public static Vec3 movement(ServerPlayer p) {
+        return p.getKnownMovement();
     }
 
     /** Walks one scan for at most {@code budget} candidate checks; returns the budget left. */

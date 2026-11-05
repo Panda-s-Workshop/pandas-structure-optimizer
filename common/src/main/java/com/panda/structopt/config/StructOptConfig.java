@@ -32,6 +32,7 @@ public final class StructOptConfig {
     public double templateCacheMaxGigabytes = 4;
     public boolean templateCacheBuilder = true;
     public int templateCacheBuilderThreads = 1;
+    public double templateCacheBuilderMaxCpu = 0.75;
     // 3.3
     public boolean templateLoadsSeparate = true;
     // 3.4
@@ -124,6 +125,7 @@ public final class StructOptConfig {
     public void clamp() {
         templateCacheMaxGigabytes = Math.clamp(templateCacheMaxGigabytes, 0.1, 1024);
         templateCacheBuilderThreads = Math.clamp(templateCacheBuilderThreads, 1, 8);
+        templateCacheBuilderMaxCpu = Math.clamp(templateCacheBuilderMaxCpu, 0.05, 1.0);
         startCacheMaxMegabytes = Math.clamp(startCacheMaxMegabytes, 1, 4096);
         lookaheadThreads = Math.clamp(lookaheadThreads, 0, 64);
         lookaheadExtraChunks = Math.clamp(lookaheadExtraChunks, 0, 32);
