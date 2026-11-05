@@ -12,6 +12,9 @@ public interface JigsawStructureAccessor {
     @Accessor("startPool")
     Holder<StructureTemplatePool> structopt$startPool();
 
+    @Accessor("maxDepth")
+    int structopt$maxDepth();
+
     @Accessor("maxDistanceFromCenter")
     JigsawStructure.MaxDistance structopt$maxDistance();
 }

@@ -95,7 +95,7 @@ public final class CacheBuilder {
             current = null;
         }
         run.stop.set(true);
-        for (Thread t : run.threads) t.interrupt();
+        // No interrupts (a thread interrupted in a file read can break the file's channel): the threads see the flag within a step
         for (Thread t : run.threads) {
             try {
                 t.join(10_000);

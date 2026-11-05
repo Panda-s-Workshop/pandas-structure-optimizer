@@ -46,6 +46,7 @@ public final class StructOptConfig {
     public int lookaheadScanCapPerTick = 256;
     public int lookaheadQueue = 256;
     public boolean lookaheadPrefetchTemplates = true;
+    public int lookaheadPrefetchMegabytes = 32;
     // 3.7
     public boolean heightCacheEnabled = true;
     public int heightCacheEntriesPerDimension = 262_144;
@@ -132,6 +133,7 @@ public final class StructOptConfig {
         lookaheadCycleTicks = Math.clamp(lookaheadCycleTicks, 1, 200);
         lookaheadScanCapPerTick = Math.clamp(lookaheadScanCapPerTick, 1, 100_000);
         lookaheadQueue = Math.clamp(lookaheadQueue, 1, 100_000);
+        lookaheadPrefetchMegabytes = Math.clamp(lookaheadPrefetchMegabytes, 0, 1024);
         heightCacheEntriesPerDimension = Math.clamp(heightCacheEntriesPerDimension, 1024, 1 << 24);
         statsLogEveryMinutes = Math.clamp(statsLogEveryMinutes, 0, 1440);
         if (heightCacheGenerators == null) heightCacheGenerators = List.of("minecraft:noise");

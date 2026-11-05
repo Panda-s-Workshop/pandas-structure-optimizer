@@ -6,6 +6,8 @@ import com.panda.structopt.coordinator.Coordinator;
 import com.panda.structopt.height.VanillaTerrain;
 import com.panda.structopt.stats.Stats;
 import com.panda.structopt.template.Pools;
+import com.panda.structopt.template.TemplateCache;
+import com.panda.structopt.template.TemplateWalk;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -63,6 +65,8 @@ import org.jspecify.annotations.Nullable;
  */
 public final class Lookahead {
     private static final long IDLE_NANOS = 5_000_000_000L;
+    /** At most this many templates are loaded ahead for one candidate chunk of one set. */
+    private static final int PREFETCH_PER_SET = 256;
     /** Blocks per tick below which a player counts as standing still. */
     public static final double MIN_SPEED = 0.05;
     private static volatile @Nullable Lookahead instance;
@@ -84,12 +88,15 @@ public final class Lookahead {
         final List<Holder<StructureSet>> sets;
         final int cx, cz, inner, outer;
         final double fx, fz, vx, vz;
+        /** Not Minecraft's own terrain: templates are loaded ahead, starts are not computed (see {@link VanillaTerrain}). */
+        final boolean templatesOnly;
         int set, rx, rz;
         boolean started;
 
         Scan(ServerLevel level, List<Holder<StructureSet>> sets, int cx, int cz, double fx, double fz, int inner, int outer, double vx,
-                double vz) {
+                double vz, boolean templatesOnly) {
             this.level = level;
+            this.templatesOnly = templatesOnly;
             this.sets = sets;
             this.cx = cx;
             this.cz = cz;
@@ -116,6 +123,14 @@ public final class Lookahead {
         this.startsRadius = ChunkPyramid.GENERATION_PYRAMID.getStepTo(ChunkStatus.FULL).getAccumulatedRadiusOf(ChunkStatus.STRUCTURE_STARTS);
     }
 
+    /** What the lookahead may do on a generator: compute starts (Minecraft's own terrain), only load templates, or nothing. */
+    public enum Mode { STARTS, TEMPLATES, NONE }
+
+    public static Mode mode(ChunkGenerator generator, StructOptConfig config) {
+        if (VanillaTerrain.is(generator)) return Mode.STARTS;
+        return config.lookaheadPrefetchTemplates && config.lookaheadPrefetchMegabytes > 0 && TemplateCache.active() ? Mode.TEMPLATES : Mode.NONE;
+    }
+
     public static void open(MinecraftServer server, StructOptConfig config) {
         close();
         if (config.lookaheadEnabled && StartCache.active() && !StructOpt.off()) instance = new Lookahead(server, config);
@@ -124,7 +139,11 @@ public final class Lookahead {
     public static void close() {
         Lookahead l = instance;
         instance = null;
-        if (l != null) l.executor.shutdownNow();
+        if (l == null) return;
+        // No interrupts: a thread interrupted while it reads a file (or a mod jar) can break that file's channel; the running jobs
+        // see that this lookahead is closed and stop at their next step
+        l.executor.shutdown();
+        l.executor.getQueue().clear();
     }
 
     public static boolean active() {
@@ -156,12 +175,14 @@ public final class Lookahead {
             if (speed < MIN_SPEED) continue;
             lastMoveNanos = now;
             ServerLevel level = p.level();
-            if (!VanillaTerrain.is(level.getChunkSource().getGenerator())) continue;
+            Mode mode = mode(level.getChunkSource().getGenerator(), config);
+            if (mode == Mode.NONE) continue;
+            boolean templatesOnly = mode == Mode.TEMPLATES;
             ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
             ChunkPos c = p.chunkPosition();
             double fx = Math.clamp(p.getX() / 16 - c.x(), 0, 1), fz = Math.clamp(p.getZ() / 16 - c.z(), 0, 1);
             scans.addLast(new Scan(level, state.possibleStructureSets(), c.x(), c.z(), fx, fz, radius - 1,
-                    radius + config.lookaheadExtraChunks, v.x / speed, v.z / speed));
+                    radius + config.lookaheadExtraChunks, v.x / speed, v.z / speed, templatesOnly));
             Stats.AHEAD_PLAYER_SCANS.increment();
             while (scans.size() > 64) scans.removeFirst();
         }
@@ -235,25 +256,28 @@ public final class Lookahead {
             if (latest != null && latest.isOrAfter(ChunkStatus.STRUCTURE_STARTS)) return;
         }
         if (!placement.isStructureChunk(state, pos.x(), pos.z())) return;
-        submit(s.level, set, pos, d, holder == null);
+        submit(s.level, set, pos, d, holder == null, s.templatesOnly);
     }
 
     /** Queues one candidate chunk of one set, past the queue cap (the dev parity harness queues a whole square this way). */
     public static boolean submitCandidate(ServerLevel level, Holder<StructureSet> set, ChunkPos pos, int distance, boolean checkDisk) {
         Lookahead l = instance;
-        if (l == null || !VanillaTerrain.is(level.getChunkSource().getGenerator())) return false;
+        if (l == null) return false;
+        Mode mode = mode(level.getChunkSource().getGenerator(), l.config);
+        if (mode == Mode.NONE) return false;
+        boolean templatesOnly = mode == Mode.TEMPLATES;
         l.queued.incrementAndGet();
-        l.executor.execute(l.new Job(level, set, pos, distance, checkDisk, l.sequence.getAndIncrement()));
+        l.executor.execute(l.new Job(level, set, pos, distance, checkDisk, templatesOnly, l.sequence.getAndIncrement()));
         return true;
     }
 
-    private void submit(ServerLevel level, Holder<StructureSet> set, ChunkPos pos, int distance, boolean checkDisk) {
+    private void submit(ServerLevel level, Holder<StructureSet> set, ChunkPos pos, int distance, boolean checkDisk, boolean templatesOnly) {
         if (queued.get() >= config.lookaheadQueue) {
             Stats.AHEAD_DROPPED.increment();
             return;
         }
         queued.incrementAndGet();
-        executor.execute(new Job(level, set, pos, distance, checkDisk, sequence.getAndIncrement()));
+        executor.execute(new Job(level, set, pos, distance, checkDisk, templatesOnly, sequence.getAndIncrement()));
     }
 
     private final class Job implements Runnable, Comparable<Job> {
@@ -262,10 +286,12 @@ public final class Lookahead {
         final ChunkPos pos;
         final int distance;
         final boolean checkDisk;
+        final boolean templatesOnly;
         final long order;
 
-        Job(ServerLevel level, Holder<StructureSet> set, ChunkPos pos, int distance, boolean checkDisk, long order) {
+        Job(ServerLevel level, Holder<StructureSet> set, ChunkPos pos, int distance, boolean checkDisk, boolean templatesOnly, long order) {
             this.level = level;
+            this.templatesOnly = templatesOnly;
             this.set = set;
             this.pos = pos;
             this.distance = distance;
@@ -284,7 +310,11 @@ public final class Lookahead {
             try {
                 if (instance != Lookahead.this || server.isStopped()) return;
                 if (checkDisk && savedWithStarts()) return;
-                computeSet(level, set, pos);
+                if (templatesOnly) {
+                    prefetchSet(level, set, pos);
+                } else {
+                    computeSet(level, set, pos);
+                }
             } catch (RuntimeException e) {
                 StructOpt.LOGGER.debug("Lookahead skipped {} at {}: {}", set.getRegisteredName(), pos, e.toString());
             } finally {
@@ -347,6 +377,37 @@ public final class Lookahead {
         return StartCache.ahead(holder, level.dimension(), level.registryAccess(), generator, randomState, templates, seed, pos, level,
                 () -> structure.generate(holder, level.dimension(), level.registryAccess(), generator, generator.getBiomeSource(), sampler,
                         randomState, templates, seed, pos, 0, level, structure.biomes()::contains));
+    }
+
+    /**
+     * 3.6 where starts aren't computed ahead: the templates this set's start will most likely ask for, loaded into the prefetch
+     * store. The structure a set tries first at a chunk depends only on the seed (its weighted pick), so that one's whole pool tree
+     * is walked; the others, tried only when the first doesn't fit the biome, get their start pools.
+     */
+    void prefetchSet(ServerLevel level, Holder<StructureSet> set, ChunkPos pos) {
+        TemplateCache cache = TemplateCache.get();
+        List<StructureSet.StructureSelectionEntry> structures = set.value().structures();
+        if (cache == null || structures.isEmpty()) return;
+        int first = structures.size() == 1 ? 0 : firstPick(structures, level.getChunkSource().getGeneratorState().getLevelSeed(), pos);
+        TemplateWalk walk = new TemplateWalk(server, cache, PREFETCH_PER_SET, () -> instance != this || server.isStopped());
+        walk.structure(structures.get(first).structure(), true);
+        for (int i = 0; i < structures.size(); i++) if (i != first) walk.structure(structures.get(i).structure(), false);
+    }
+
+    /** The index of the structure vanilla's set loop tries first at this chunk (its first weighted pick). */
+    static int firstPick(List<StructureSet.StructureSelectionEntry> structures, long seed, ChunkPos pos) {
+        WorldgenRandom random = new WorldgenRandom(new LegacyRandomSource(0L));
+        random.setLargeFeatureSeed(seed, pos.x(), pos.z());
+        int total = 0;
+        for (StructureSet.StructureSelectionEntry option : structures) total += option.weight();
+        int choice = random.nextInt(total);
+        int index = 0;
+        for (StructureSet.StructureSelectionEntry option : structures) {
+            choice -= option.weight();
+            if (choice < 0) break;
+            index++;
+        }
+        return index;
     }
 
     /** 3.6: the templates of the start pools this set can begin with, loaded here so the worker finds them in memory. */

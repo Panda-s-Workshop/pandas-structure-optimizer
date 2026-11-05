@@ -18,6 +18,7 @@ public final class Texts {
     public static final String STATS_BUILDER = P + "stats.builder";
     public static final String STATS_STARTS = P + "stats.starts";
     public static final String STATS_AHEAD = P + "stats.ahead";
+    public static final String STATS_PREFETCH = P + "stats.prefetch";
     public static final String STATS_HEIGHT = P + "stats.height";
     public static final String STATS_SPAWNS = P + "stats.spawns";
     public static final String STATS_COORDINATOR = P + "stats.coordinator";
@@ -37,7 +38,7 @@ public final class Texts {
     public static final String COST_PLACEMENT = P + "cost.placement";
 
     public static final List<String> ALL = List.of(NAME, DESCRIPTION, STATS_HEADER, STATS_OFF, STATS_TEMPLATES, STATS_TEMPLATE_CACHE,
-            STATS_TEMPLATE_CACHE_OFF, STATS_LOADS, STATS_BUILDER, STATS_STARTS, STATS_AHEAD, STATS_HEIGHT, STATS_SPAWNS,
+            STATS_TEMPLATE_CACHE_OFF, STATS_LOADS, STATS_BUILDER, STATS_STARTS, STATS_AHEAD, STATS_PREFETCH, STATS_HEIGHT, STATS_SPAWNS,
             STATS_COORDINATOR, STATS_TOP, STATS_TOP_LINE, STATS_NONE, CACHE_CLEARED, CACHE_REBUILD, CACHE_OFF, COORDINATOR_ON,
             COORDINATOR_OFF, COORDINATOR_SET, ON, OFF, COST_TEMPLATES, COST_HEIGHT, COST_PLACEMENT);
 

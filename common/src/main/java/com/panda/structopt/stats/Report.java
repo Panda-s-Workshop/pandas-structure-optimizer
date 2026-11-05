@@ -56,6 +56,9 @@ public final class Report {
         long computed = Stats.AHEAD_COMPUTED.sum(), used = Stats.AHEAD_USED.sum();
         out.add(Component.translatable(Texts.STATS_AHEAD, computed, used, Math.max(0, computed - used), Stats.AHEAD_DROPPED.sum(),
                 Lookahead.queuedCount()));
+        long[] early = cache == null ? new long[3] : cache.aheadSize();
+        out.add(Component.translatable(Texts.STATS_PREFETCH, Stats.PREFETCHED.sum(), Stats.PREFETCH_USED.sum(), early[2], early[0],
+                early[1] >> 20, Stats.PREFETCH_UPGRADED.sum()));
         out.add(Component.translatable(Texts.STATS_HEIGHT, Stats.HEIGHT_HITS.sum(), Stats.HEIGHT_MISSES.sum()));
         out.add(Component.translatable(Texts.STATS_SPAWNS, Stats.SPAWN_SKIPS.sum()));
         out.add(Component.translatable(Texts.STATS_COORDINATOR, Component.translatable(Coordinator.active() ? Texts.ON : Texts.OFF),

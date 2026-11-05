@@ -1,11 +1,16 @@
 package com.panda.structopt.template;
 
 import com.panda.structopt.StructOpt;
+import com.panda.structopt.config.StructOptConfig;
 import com.panda.structopt.mixin.TemplateSourceAccessor;
 import com.panda.structopt.stats.Stats;
 import com.panda.structopt.util.SingleFlight;
+import com.panda.structopt.util.WeightedStore;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.nio.channels.ClosedByInterruptException;
+import java.util.LinkedHashSet;
 import java.io.InputStream;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
@@ -27,11 +32,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderGetter;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.levelgen.structure.templatesystem.loader.TemplateSource;
 import org.jspecify.annotations.Nullable;
@@ -64,8 +74,19 @@ public final class TemplateCache {
         return t;
     });
     private final Object indexLock = new Object();
+    /** 3.6: templates loaded ahead of the chunk workers, by cache key; each is handed to one load, the oldest dropped over budget. */
+    private final WeightedStore<String, Early> ahead =
+            new WeightedStore<>((long) StructOptConfig.get().lookaheadPrefetchMegabytes << 20);
+    /** The pools each template loaded ahead opens, so a later walk can go on past a template already in memory. */
+    private final Map<Identifier, List<Identifier>> jigsawPools = new ConcurrentHashMap<>();
 
     private record Result(StructureTemplate template, CompoundTag fixed) {}
+
+    /** A template loaded ahead, with the block lookup it was built with: only a load through that same lookup may take it. */
+    private record Early(StructureTemplate template, HolderGetter<Block> blocks) {}
+
+    /** Who asked for an upgrade: the game, the background builder, or the prefetch. Only the game's count as misses. */
+    private enum Asker { GAME, BUILDER, AHEAD }
 
     private TemplateCache(Path folder, String fingerprint, CacheIndex index, long capBytes) {
         this.folder = folder;
@@ -150,6 +171,11 @@ public final class TemplateCache {
         }
         String key = CacheKey.entry(id.toString(), CacheKey.sha256(bytes));
         TemplateSourceAccessor access = (TemplateSourceAccessor) source;
+        Early early = cache.ahead.take(key);
+        if (early != null && early.blocks() == access.structopt$blockLookup()) {
+            Stats.PREFETCH_USED.increment();
+            return Optional.of(early.template());
+        }
         CompoundTag cached = cache.read(key);
         if (cached != null) {
             StructureTemplate template = new StructureTemplate();
@@ -157,7 +183,7 @@ public final class TemplateCache {
             return Optional.of(template);
         }
         boolean[] shared = new boolean[1];
-        Result result = cache.flight.run(key, () -> cache.upgrade(key, id, bytes, access, false), shared);
+        Result result = cache.flight.run(key, () -> cache.upgrade(key, id, bytes, access, Asker.GAME), shared);
         if (!shared[0]) return Optional.of(result.template());
         StructureTemplate template = new StructureTemplate();
         template.load(access.structopt$blockLookup(), result.fixed().copy());
@@ -178,11 +204,81 @@ public final class TemplateCache {
         String key = CacheKey.entry(id.toString(), CacheKey.sha256(bytes));
         if (index.get(key) != null || flight.isInFlight(key)) return false;
         try {
-            flight.run(key, () -> upgrade(key, id, bytes, (TemplateSourceAccessor) source, true));
+            flight.run(key, () -> upgrade(key, id, bytes, (TemplateSourceAccessor) source, Asker.BUILDER));
             return true;
         } catch (RuntimeException e) {
             return false;
         }
+    }
+
+    /**
+     * 3.6 where starts aren't computed ahead: builds a template ahead of the chunk workers and keeps it in the prefetch store, where
+     * the game's own load of it takes it (from the disk cache, or upgraded and written to it on a miss). The world can't tell: the
+     * game gets the same template it would have built from the same cached NBT.
+     * @return the template pools its jigsaw blocks open (empty when it couldn't be read)
+     */
+    public List<Identifier> preload(Identifier id, Identifier file, ResourceManager resources, TemplateSource source) {
+        byte[] bytes;
+        try (InputStream in = resources.open(file)) {
+            bytes = in.readAllBytes();
+        } catch (IOException e) {
+            return List.of();
+        }
+        String key = CacheKey.entry(id.toString(), CacheKey.sha256(bytes));
+        if (ahead.contains(key)) return jigsawPools.getOrDefault(id, List.of());
+        TemplateSourceAccessor access = (TemplateSourceAccessor) source;
+        try {
+            CompoundTag tag = read(key);
+            StructureTemplate template;
+            if (tag != null) {
+                template = new StructureTemplate();
+                template.load(access.structopt$blockLookup(), tag);
+            } else {
+                boolean[] shared = new boolean[1];
+                Result result = flight.run(key, () -> upgrade(key, id, bytes, access, Asker.AHEAD), shared);
+                tag = result.fixed();
+                template = shared[0] ? null : result.template(); // shared: a worker is loading it right now
+            }
+            List<Identifier> pools = TemplateNbt.jigsawPools(tag);
+            jigsawPools.put(id, pools);
+            if (template != null && ahead.put(key, new Early(template, access.structopt$blockLookup()), TemplateNbt.weight(tag))) {
+                Stats.PREFETCHED.increment();
+            }
+            return pools;
+        } catch (RuntimeException e) {
+            return List.of(); // the game's own load reports a broken template the usual way
+        }
+    }
+
+    /**
+     * The pools a template already in the game's memory opens: read when it was loaded ahead, or else from its jigsaw blocks (the
+     * palette's block lists are a concurrent cache, so this is safe beside the chunk workers). Remembered for the session.
+     */
+    public List<Identifier> knownJigsawPools(Identifier id, StructureTemplate template) {
+        return jigsawPools.computeIfAbsent(id, k -> {
+            try {
+                Set<Identifier> out = new LinkedHashSet<>();
+                for (StructureTemplate.StructureBlockInfo info : template.filterBlocks(BlockPos.ZERO, new StructurePlaceSettings(), Blocks.JIGSAW)) {
+                    if (info.nbt() == null) continue;
+                    String pool = info.nbt().getStringOr("pool", "");
+                    Identifier p = pool.isEmpty() || pool.equals("minecraft:empty") ? null : Identifier.tryParse(pool);
+                    if (p != null) out.add(p);
+                }
+                return List.copyOf(out);
+            } catch (RuntimeException e) {
+                return List.of(); // no palette, or a mod's palette list that can't be read here
+            }
+        });
+    }
+
+    /** For tests: whether a template file's current bytes are waiting in the prefetch store. */
+    public boolean holdsAhead(Identifier id, byte[] bytes) {
+        return ahead.contains(CacheKey.entry(id.toString(), CacheKey.sha256(bytes)));
+    }
+
+    /** Templates held in the prefetch store: count, estimated bytes, dropped unused for the budget. */
+    public long[] aheadSize() {
+        return new long[] {ahead.size(), ahead.weight(), ahead.dropped()};
     }
 
     public boolean contains(Identifier id, byte[] bytes) {
@@ -199,7 +295,10 @@ public final class TemplateCache {
             Stats.TEMPLATE_AVOIDED_MICROS.add(entry.upgradeMicros());
             usedThisSession.add(key);
             return tag;
+        } catch (ClosedByInterruptException | InterruptedIOException e) {
+            return null; // the thread was interrupted, the entry is fine: never delete it for that
         } catch (IOException | RuntimeException e) {
+            if (Thread.currentThread().isInterrupted()) return null;
             StructOpt.LOGGER.warn("Template cache entry for {} unreadable, loading it the vanilla way: {}", entry.templateId(), e.toString());
             forget(key);
             try {
@@ -211,7 +310,7 @@ public final class TemplateCache {
         }
     }
 
-    private Result upgrade(String key, Identifier id, byte[] bytes, TemplateSourceAccessor source, boolean builder) {
+    private Result upgrade(String key, Identifier id, byte[] bytes, TemplateSourceAccessor source, Asker asker) {
         CompoundTag raw;
         try {
             raw = NbtIo.readCompressed(new ByteArrayInputStream(bytes), NbtAccounter.unlimitedHeap());
@@ -225,11 +324,13 @@ public final class TemplateCache {
         } finally {
             Capture.end();
         }
-        if (builder) {
-            Stats.BUILDER_UPGRADED.increment();
-        } else {
-            Stats.TEMPLATE_MISSES.increment();
-            Stats.TEMPLATE_UPGRADE_MICROS.add(capture.micros);
+        switch (asker) {
+            case BUILDER -> Stats.BUILDER_UPGRADED.increment();
+            case AHEAD -> Stats.PREFETCH_UPGRADED.increment();
+            case GAME -> {
+                Stats.TEMPLATE_MISSES.increment();
+                Stats.TEMPLATE_UPGRADE_MICROS.add(capture.micros);
+            }
         }
         CompoundTag fixed = capture.fixed;
         if (fixed != null) store(key, id, fixed, capture.micros);

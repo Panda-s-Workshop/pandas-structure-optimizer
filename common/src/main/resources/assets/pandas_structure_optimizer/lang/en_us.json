@@ -10,6 +10,7 @@
   "command.pandas_structure_optimizer.stats.builder": "Cache builder: %s, %s of %s templates checked, %s upgraded into the cache",
   "command.pandas_structure_optimizer.stats.starts": "Structure starts: %s reused, %s computed, %s shared while in progress; %s kept (%s MB)",
   "command.pandas_structure_optimizer.stats.ahead": "Computed ahead: %s, used %s, not used yet %s, dropped %s (%s queued)",
+  "command.pandas_structure_optimizer.stats.prefetch": "Templates loaded ahead: %s, taken by the game %s, dropped unused %s, %s waiting (about %s MB); %s of them upgraded first",
   "command.pandas_structure_optimizer.stats.height": "Height cache: %s hits, %s misses",
   "command.pandas_structure_optimizer.stats.spawns": "Spawn checks that skipped an unfinished chunk: %s",
   "command.pandas_structure_optimizer.stats.coordinator": "Coordinator: %s, %s starts dropped",

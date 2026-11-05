@@ -79,6 +79,13 @@ working.
 - Results only reach the world through the shared start results, when the chunk worker asks for them. The mod never
   schedules chunks or takes tickets.
 - Before a start is computed, the templates of its start pool are loaded on the same thread (`lookaheadPrefetchTemplates`).
+- On terrain that isn't Minecraft's own, no start is computed, but the same scan still loads templates ahead
+  (`lookaheadPrefetchTemplates`): finding a set's candidate chunks needs only the seed, and loading a template needs no terrain.
+  The structure a set tries first at a chunk is a weighted pick from the seed alone; its pools are walked level by level down to
+  its depth (the next pools come from the jigsaw blocks of the templates just loaded), at most 256 templates per candidate. The
+  set's other structures get their start pools. The templates wait in a store of about `lookaheadPrefetchMegabytes`; when the
+  game loads one of them it takes it from there instead of building it, each copy once, and the oldest unused ones are dropped.
+  Templates already in the game's memory are not loaded again.
 - The scan stops when no player has moved for 5 seconds.
 
 ### Height cache
@@ -137,7 +144,8 @@ written back with its default. Not synced to clients.
 | `lookaheadCycleTicks` | 10 | each player once per this many ticks, in as many batches |
 | `lookaheadScanCapPerTick` | 256 | candidate checks per tick |
 | `lookaheadQueue` | 256 | most candidates waiting |
-| `lookaheadPrefetchTemplates` | true | load a start's first templates before it is computed |
+| `lookaheadPrefetchTemplates` | true | load templates before the game asks: a start's first ones before it is computed; on other terrain, the likely structure's whole pool tree |
+| `lookaheadPrefetchMegabytes` | 32 | about how much memory templates loaded ahead may hold until the game takes them (0 to 1024) |
 | `heightCacheEnabled` | true | the height cache |
 | `heightCacheEntriesPerDimension` | 262144 | its size |
 | `heightCacheGenerators` | `["minecraft:noise"]` | generator types it may serve |

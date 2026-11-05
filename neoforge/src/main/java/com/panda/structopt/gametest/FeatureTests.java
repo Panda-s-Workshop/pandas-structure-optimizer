@@ -10,6 +10,8 @@ import com.panda.structopt.height.Heights;
 import com.panda.structopt.height.VanillaTerrain;
 import com.panda.structopt.mixin.StructureTemplateManagerAccessor;
 import com.panda.structopt.mixin.TemplateSourceAccessor;
+import com.panda.structopt.template.Pools;
+import com.panda.structopt.template.TemplateWalk;
 import com.panda.structopt.spawn.SpawnProbes;
 import com.panda.structopt.start.Lookahead;
 import com.panda.structopt.start.StartCache;
@@ -119,6 +121,57 @@ final class FeatureTests {
             if (!vanilla.equals(second.save(new CompoundTag()))) helper.fail("cached load of " + id + " differs from vanilla");
         }
         StructOpt.LOGGER.info("[structopt test] template_cache_roundtrip compared {} (older: {}, current {})", ids, old, current);
+        helper.succeed();
+    }
+
+    // ---- 3.6 -------------------------------------------------------------------------------------------------------------
+
+    /**
+     * The prefetch walks a jigsaw structure past its start pool (the pools come from the jigsaw blocks of the templates it loads);
+     * the game's own load then takes each template from the store instead of building it, and gets what vanilla would build; a
+     * second walk over the same structure loads nothing again.
+     */
+    static void templatePrefetch(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        TemplateCache cache = need(helper, TemplateCache.get(), "the template cache is off");
+        ResourceManager resources = server.getResourceManager();
+        ResourceManagerTemplateSource source = ((StructureTemplateManagerAccessor) server.getStructureTemplateManager()).structopt$resourceManagerSource();
+        Holder<Structure> bastion = server.registryAccess().lookupOrThrow(Registries.STRUCTURE).getOrThrow(BuiltinStructures.BASTION_REMNANT);
+        List<Identifier> start = new ArrayList<>();
+        Pools.startTemplates(bastion, start, Integer.MAX_VALUE);
+        TemplateWalk walk = new TemplateWalk(server, cache, 256, () -> false);
+        walk.structure(bastion, true);
+        List<Identifier> loaded = walk.loads();
+        if (loaded.size() <= start.size()) helper.fail("the walk loaded " + loaded.size() + " templates, no more than the " + start.size() + " of the start pool: " + loaded);
+        if (loaded.stream().allMatch(start::contains)) helper.fail("the walk never left the start pool");
+        List<Identifier> sample = loaded.subList(0, Math.min(8, loaded.size()));
+        for (Identifier id : sample) {
+            CompoundTag vanilla = ((TemplateSourceAccessor) source).structopt$readStructure(read(helper, resources, FILES.idToFile(id)))
+                    .save(new CompoundTag());
+            byte[] raw = bytes(helper, resources, FILES.idToFile(id));
+            if (!cache.holdsAhead(id, raw)) helper.fail(id + " was loaded ahead but isn't waiting in the store");
+            StructureTemplate game = TemplateCache.load(id, FILES.idToFile(id), resources, source).orElseThrow();
+            if (cache.holdsAhead(id, raw)) helper.fail("the game's load of " + id + " didn't take the template loaded ahead");
+            if (!vanilla.equals(game.save(new CompoundTag()))) helper.fail("the template loaded ahead for " + id + " differs from vanilla");
+            if (TemplateCache.load(id, FILES.idToFile(id), resources, source).orElseThrow() == game) helper.fail(id + " was handed out twice");
+            server.getStructureTemplateManager().get(id); // in the game's memory now, as after a real load
+        }
+        TemplateWalk again = new TemplateWalk(server, cache, 256, () -> false);
+        again.structure(bastion, true);
+        for (Identifier id : again.loads()) if (sample.contains(id)) helper.fail(id + " is in memory, yet was loaded ahead again");
+        // A structure the game met first (its start pool already in the game's memory, never walked) is still walked past its
+        // start pool, through the jigsaw blocks of the templates the game holds
+        Holder<Structure> city = server.registryAccess().lookupOrThrow(Registries.STRUCTURE).getOrThrow(BuiltinStructures.ANCIENT_CITY);
+        List<Identifier> cityStart = new ArrayList<>();
+        Pools.startTemplates(city, cityStart, Integer.MAX_VALUE);
+        for (Identifier id : cityStart) server.getStructureTemplateManager().get(id);
+        TemplateWalk afterGame = new TemplateWalk(server, cache, 256, () -> false);
+        afterGame.structure(city, true);
+        if (afterGame.loads().isEmpty() || afterGame.loads().stream().anyMatch(cityStart::contains)) {
+            helper.fail("with the ancient city's start pool in the game's memory the walk loaded " + afterGame.loads());
+        }
+        StructOpt.LOGGER.info("[structopt test] template_prefetch: {} templates ahead ({} in the start pool), {} checked against vanilla",
+                loaded.size(), start.size(), sample.size());
         helper.succeed();
     }
 
@@ -341,6 +394,12 @@ final class FeatureTests {
             }
         };
         if (VanillaTerrain.is(new NoiseBasedChunkGenerator(moddedBiomes, settings))) helper.fail("a mod's biome source counts as vanilla");
+        StructOptConfig config = StructOptConfig.get();
+        if (Lookahead.mode(vanilla, config) != Lookahead.Mode.STARTS) helper.fail("the lookahead wouldn't compute starts on vanilla terrain");
+        if (Lookahead.mode(subclass, config) == Lookahead.Mode.STARTS) helper.fail("the lookahead would compute starts on modded terrain");
+        if (TemplateCache.active() && Lookahead.mode(subclass, config) != Lookahead.Mode.TEMPLATES) {
+            helper.fail("the lookahead wouldn't load templates ahead on modded terrain");
+        }
         helper.succeed();
     }
 
@@ -449,7 +508,7 @@ final class FeatureTests {
             if (!d.templateCacheEnabled || d.templateCacheMaxGigabytes != 4 || !d.templateCacheBuilder || d.templateCacheBuilderThreads != 1 || d.templateCacheBuilderMaxCpu != 0.75
                     || !d.templateLoadsSeparate || !d.startCacheEnabled || d.startCacheMaxMegabytes != 64 || !d.lookaheadEnabled
                     || d.lookaheadThreads != 0 || d.lookaheadExtraChunks != 8 || d.lookaheadCycleTicks != 10 || d.lookaheadScanCapPerTick != 256
-                    || d.lookaheadQueue != 256 || !d.lookaheadPrefetchTemplates || !d.heightCacheEnabled
+                    || d.lookaheadQueue != 256 || !d.lookaheadPrefetchTemplates || d.lookaheadPrefetchMegabytes != 32 || !d.heightCacheEnabled
                     || d.heightCacheEntriesPerDimension != 262_144 || !d.heightCacheGenerators.equals(List.of("minecraft:noise"))
                     || !d.spawnProbesSkipUnfinishedChunks || d.statsLogEveryMinutes != 5 || !d.warningsSlowStructures
                     || d.coordinatorNewWorlds || !d.coordinatorPriorities.isEmpty()) helper.fail("a default differs from the design: " + d.toJson());

@@ -29,7 +29,12 @@ public final class Stats {
     /** Player scans started (one per moving player per cycle). */
     public static final LongAdder AHEAD_PLAYER_SCANS = new LongAdder();
     public static final LongAdder AHEAD_DROPPED = new LongAdder();
+    /** Templates loaded ahead: into the game's memory before a start computed ahead, or into the prefetch store. */
     public static final LongAdder PREFETCHED = new LongAdder();
+    /** Templates the game took from the prefetch store instead of building them itself. */
+    public static final LongAdder PREFETCH_USED = new LongAdder();
+    /** Templates the prefetch upgraded with the data fixers (not in the disk cache yet). */
+    public static final LongAdder PREFETCH_UPGRADED = new LongAdder();
     public static final LongAdder HEIGHT_HITS = new LongAdder();
     public static final LongAdder HEIGHT_MISSES = new LongAdder();
     public static final LongAdder SPAWN_SKIPS = new LongAdder();
@@ -101,7 +106,7 @@ public final class Stats {
     public static void reset() {
         for (LongAdder a : List.of(TEMPLATE_HITS, TEMPLATE_MISSES, BUILDER_UPGRADED, TEMPLATE_AVOIDED_MICROS, TEMPLATE_UPGRADE_MICROS, TEMPLATE_LOADS,
                 TEMPLATE_SHARED_LOADS, START_HITS, START_MISSES, START_SHARED, START_UNSHAREABLE, AHEAD_COMPUTED, AHEAD_USED, AHEAD_SCANNED, AHEAD_PLAYER_SCANS, AHEAD_DROPPED,
-                PREFETCHED, HEIGHT_HITS, HEIGHT_MISSES, SPAWN_SKIPS, COORDINATOR_BLOCKED)) a.reset();
+                PREFETCHED, PREFETCH_USED, PREFETCH_UPGRADED, HEIGHT_HITS, HEIGHT_MISSES, SPAWN_SKIPS, COORDINATOR_BLOCKED)) a.reset();
         BUILDER_DONE.set(0);
         BUILDER_TOTAL.set(0);
         builderState = "idle";
