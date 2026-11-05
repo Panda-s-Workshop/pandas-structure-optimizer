@@ -29,6 +29,16 @@ public final class StructOptGameTests {
     static {
         FUNCTIONS.register("mod_loaded", () -> StructOptGameTests::modLoaded);
         FUNCTIONS.register("lang_coverage", () -> StructOptGameTests::langCoverage);
+        FUNCTIONS.register("template_cache_roundtrip", () -> FeatureTests::templateCacheRoundtrip);
+        FUNCTIONS.register("cache_builder_fills", () -> FeatureTests::cacheBuilderFills);
+        FUNCTIONS.register("template_parallel_loads", () -> FeatureTests::templateParallelLoads);
+        FUNCTIONS.register("start_cache_copy", () -> FeatureTests::startCacheCopy);
+        FUNCTIONS.register("height_cache_equivalence", () -> FeatureTests::heightCacheEquivalence);
+        FUNCTIONS.register("spawn_probe_skips", () -> FeatureTests::spawnProbeSkips);
+        FUNCTIONS.register("stats_command", () -> FeatureTests::statsCommand);
+        FUNCTIONS.register("cache_commands", () -> FeatureTests::cacheCommands);
+        FUNCTIONS.register("config_defaults", () -> FeatureTests::configDefaults);
+        FUNCTIONS.register("coordinator_no_overlap", () -> FeatureTests::coordinatorNoOverlap);
     }
 
     private StructOptGameTests() {}

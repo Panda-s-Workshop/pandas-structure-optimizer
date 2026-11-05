@@ -1,1 +1,5 @@
 accessWidener	v2	official
+# the height cache's allow list reads a generator's type id
+accessible method net/minecraft/world/level/chunk/ChunkGenerator codec ()Lcom/mojang/serialization/MapCodec;
+# the lookahead skips chunks the chunk system already took past structure starts
+accessible method net/minecraft/server/level/ChunkMap getVisibleChunkIfPresent (J)Lnet/minecraft/server/level/ChunkHolder;

@@ -13,6 +13,23 @@ rest before the chunks are needed. It needs no datapack changes, and it runs wit
 
 Work in progress: nothing is released yet.
 
+## What it does
+
+- Keeps every structure template after its data-fixer upgrade on disk, so later sessions skip the upgrade. A background
+  thread fills the cache on spare CPU.
+- Loads templates one at a time per template, without blocking threads that want other templates.
+- Shares structure-start results, so a start worked out twice (by another mod, or ahead of time) is only computed once.
+- Computes structure starts ahead of moving players, spread over ticks, on its own low-priority threads.
+- Caches terrain-height answers for the vanilla noise generator.
+- Lets spawn checks skip chunks that are still generating instead of waiting for them.
+- Shows its numbers: `/structopt stats`, a periodic log line, and a warning for structures that cost a lot and rarely
+  place.
+- Optional, for new worlds only: a structure coordinator that keeps structures from different mods from overlapping.
+
+With default settings a seed generates the same structures as without the mod; `docs/CONTRACT.md` says how that is
+checked. `docs/DESIGN.md` explains each system, the settings in `config/pandas_structure_optimizer.json`, and the
+commands.
+
 ## Build and run
 
 JDK 25 is pinned in `gradle.properties` (`org.gradle.java.home`). CI overrides it.

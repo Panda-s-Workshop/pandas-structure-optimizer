@@ -2,7 +2,23 @@
   "required": true,
   "minVersion": "0.8",
   "package": "com.panda.structopt.mixin",
+  "plugin": "com.panda.structopt.StructOptMixinPlugin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": [],
+  "mixins": [
+    "ChunkGeneratorMixin",
+    "JigsawStructureAccessor",
+    "ListPoolElementAccessor",
+    "NoiseBasedChunkGeneratorMixin",
+    "ResourceManagerTemplateSourceMixin",
+    "ServerChunkCacheMixin",
+    "ServerLevelMixin",
+    "SinglePoolElementAccessor",
+    "StructurePieceAccessor",
+    "StructureTemplateManagerAccessor",
+    "StructureTemplateManagerMixin",
+    "StructureTemplatePoolAccessor",
+    "TemplateSourceAccessor",
+    "TemplateSourceMixin"
+  ],
   "injectors": { "defaultRequire": 1 }
 }
