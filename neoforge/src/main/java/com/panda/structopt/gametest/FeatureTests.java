@@ -367,6 +367,10 @@ final class FeatureTests {
             NoiseBasedChunkGenerator generator = new NoiseBasedChunkGenerator(biomes, Holder.direct(moddedSettings));
             if (VanillaTerrain.is(generator)) helper.fail("a router with a mod-made density function deep inside counts as vanilla");
             if (Heights.allowed(generator)) helper.fail("the height cache would serve modded terrain");
+            if (VanillaTerrain.foreignDensityFunction(generator, List.of("com.panda.structopt.gametest.")) != null) {
+                helper.fail("a trusted package still counts as modded terrain");
+            }
+            if (VanillaTerrain.foreignDensityFunction(generator, List.of("com.panda.other.")) == null) helper.fail("an unrelated trusted package let modded terrain through");
         } catch (ReflectiveOperationException e) {
             helper.fail("couldn't build the modded router: " + e);
         }
@@ -509,7 +513,7 @@ final class FeatureTests {
                     || !d.templateLoadsSeparate || !d.startCacheEnabled || d.startCacheMaxMegabytes != 64 || !d.lookaheadEnabled
                     || d.lookaheadThreads != 0 || d.lookaheadExtraChunks != 8 || d.lookaheadCycleTicks != 10 || d.lookaheadScanCapPerTick != 256
                     || d.lookaheadQueue != 256 || !d.lookaheadPrefetchTemplates || d.lookaheadPrefetchMegabytes != 32 || !d.heightCacheEnabled
-                    || d.heightCacheEntriesPerDimension != 262_144 || !d.heightCacheGenerators.equals(List.of("minecraft:noise"))
+                    || d.heightCacheEntriesPerDimension != 262_144 || !d.heightCacheGenerators.equals(List.of("minecraft:noise")) || !d.terrainTrustedPackages.isEmpty()
                     || !d.spawnProbesSkipUnfinishedChunks || d.statsLogEveryMinutes != 5 || !d.warningsSlowStructures
                     || d.coordinatorNewWorlds || !d.coordinatorPriorities.isEmpty()) helper.fail("a default differs from the design: " + d.toJson());
             Path dir = Files.createTempDirectory("structopt-config");

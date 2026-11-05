@@ -14,6 +14,7 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +52,8 @@ public final class StructOptConfig {
     public boolean heightCacheEnabled = true;
     public int heightCacheEntriesPerDimension = 262_144;
     public List<String> heightCacheGenerators = List.of("minecraft:noise");
+    // 3.5, 3.7: terrain code known to give the same heights on every thread (class name prefixes), trusted like Minecraft's own
+    public List<String> terrainTrustedPackages = new ArrayList<>();
     // 3.8
     public boolean spawnProbesSkipUnfinishedChunks = true;
     // 3.9, 3.10

@@ -71,6 +71,8 @@ working.
   noise router (followed through sums, splines and registry references), data pack terrain included. A terrain mod's own
   types may answer heights differently on another thread, and a start computed ahead would then not be the one the chunk
   worker computes. On such a world (UltraTerraForged, for one) the mod logs it once and computes nothing ahead.
+  A terrain mod known to give the same heights on every thread can be trusted with `terrainTrustedPackages` (class name
+  prefixes); its classes then count as Minecraft's own, for starts computed ahead and for the height cache.
 - In that band it finds each structure set's candidate chunks from the seed. A random-spread set has one per spacing
   region. Only candidates that pass the set's own placement check are kept, at most `lookaheadScanCapPerTick` checks per
   tick. Chunks already past the structure step, loaded or saved, are skipped.
@@ -149,6 +151,7 @@ written back with its default. Not synced to clients.
 | `heightCacheEnabled` | true | the height cache |
 | `heightCacheEntriesPerDimension` | 262144 | its size |
 | `heightCacheGenerators` | `["minecraft:noise"]` | generator types it may serve |
+| `terrainTrustedPackages` | `[]` | class name prefixes of terrain code trusted like Minecraft's own (only for mods that give the same heights on every thread) |
 | `spawnProbesSkipUnfinishedChunks` | true | spawn checks skip unfinished chunks |
 | `statsLogEveryMinutes` | 5 | periodic summary on dedicated servers (0: off) |
 | `warningsSlowStructures` | true | slow-structure warnings |
