@@ -76,6 +76,8 @@ public final class CacheBuilder {
         synchronized (STATE) {
             current = run;
             Stats.BUILDER_DONE.set(0);
+            Stats.BUILDER_TOTAL.set(0);
+            Stats.builderState = "listing"; // never the last run's "done"
         }
         Thread lister = new Thread(() -> run(run, server, cache, config), "StructOpt template cache builder");
         lister.setDaemon(true);
