@@ -1,0 +1,29 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share your packs and numbers: packs that run Panda's Structure Optimizer, /structopt stats from your server, before and after timings.
+
+  - type: textarea
+    id: show
+    attributes:
+      label: What you'd like to share
+      description: Drag screenshots straight into this box.
+    validations:
+      required: true
+
+  - type: input
+    id: seed
+    attributes:
+      label: Seed and coordinates
+      placeholder: The pack's structure mods, and your stats or timings
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Panda's Structure Optimizer version
+      placeholder: 0.1.0
+    validations:
+      required: false

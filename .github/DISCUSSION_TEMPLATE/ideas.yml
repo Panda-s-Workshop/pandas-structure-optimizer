@@ -1,0 +1,29 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest rooms, creatures, enchantments and other improvements, and upvote the ideas you'd like most: votes help decide what comes next.
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      placeholder: A number you'd like in /structopt stats, or a structure mod that is still slow.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it would be good
+      description: What it adds to play, or the problem it solves.
+    validations:
+      required: false
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: Examples
+      description: Screenshots, sketches, or other mods and games that do something similar.
+    validations:
+      required: false

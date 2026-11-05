@@ -1,0 +1,104 @@
+name: 🐛 Bug report
+description: Something behaves wrong, without crashing.
+labels: ["type: bug", "status: needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! One problem per issue, please. For crashes use the **Crash report** form, and for problems that only happen together with another mod, **Conflict with another mod**. Questions go to [Discussions](https://github.com/Panda-s-Workshop/pandas-structure-optimizer/discussions).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What's wrong, and where. Screenshots help a lot.
+      placeholder: A village generated differently with the mod installed than without it, on the same seed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      placeholder: |
+        1. Create a world with Panda's Structure Optimizer and a structure mod
+        2. Fly to new terrain and run /structopt stats
+        3. The structure is missing, or looks different than without the mod
+    validations:
+      required: false
+
+  - type: input
+    id: where
+    attributes:
+      label: Seed and coordinates
+      description: The world seed and the coordinates from F3, so the same spot can be found again.
+      placeholder: Seed 1111, a minecraft:village_plains at 2104 70 -880
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Template cache (the cache folder, cache commands)
+        - Structure starts (shared results, starts computed ahead)
+        - Height cache or spawn probes
+        - The coordinator (overlaps between structures)
+        - Config and the /structopt stats output
+        - The /structopt command and the start summary
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Panda's Structure Optimizer version
+      description: From the jar's name or the mods list, such as 0.1.0.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: neoforge
+    attributes:
+      label: NeoForge version
+      description: Panda's Structure Optimizer is for Minecraft 26.3 on NeoForge and Fabric.
+      placeholder: 26.3.0.89
+    validations:
+      required: true
+
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods
+      description: Your mod list, the modpack's name and version, or "none". Mods that add enchantments matter most.
+    validations:
+      required: true
+
+  - type: input
+    id: log
+    attributes:
+      label: Log
+      description: Upload `logs/latest.log` to [mclo.gs](https://mclo.gs) and paste the link.
+      placeholder: https://mclo.gs/...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I'm on the latest Panda's Structure Optimizer release.
+          required: false
+        - label: I searched the open and closed issues for this problem.
+          required: true

@@ -1,0 +1,75 @@
+name: 🐢 Performance problem
+description: Generation is still slow, the server lags, or memory or disk use is high.
+labels: ["type: performance", "status: needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A profile shows where the time goes, and is the most useful thing you can send.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What's slow?
+      placeholder: Chunks still take long to appear when I fly into new terrain, and the log says Can't keep up.
+    validations:
+      required: true
+
+  - type: input
+    id: profile
+    attributes:
+      label: Profile
+      description: A [spark](https://spark.lucko.me) profile taken while it's slow (`/spark profiler start`, wait a minute, `/spark profiler stop`) gives the most to go on.
+      placeholder: https://spark.lucko.me/...
+    validations:
+      required: false
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware and memory
+      description: CPU, how much memory the game or server is given (-Xmx), singleplayer or dedicated server.
+      placeholder: Ryzen 5 5600, 6 GB, singleplayer
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Template cache (the cache folder, cache commands)
+        - Structure starts (shared results, starts computed ahead)
+        - Height cache or spawn probes
+        - The coordinator (overlaps between structures)
+        - Config and the /structopt stats output
+        - The /structopt command and the start summary
+        - Something else
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Panda's Structure Optimizer version
+      description: From the jar's name or the mods list, such as 0.1.0.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: neoforge
+    attributes:
+      label: NeoForge version
+      description: Panda's Structure Optimizer is for Minecraft 26.3 on NeoForge and Fabric.
+      placeholder: 26.3.0.89
+    validations:
+      required: true
+
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods
+      description: Your mod list, the modpack's name and version, or "none". Performance mods matter most.
+    validations:
+      required: true

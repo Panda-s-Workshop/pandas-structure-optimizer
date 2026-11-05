@@ -1,0 +1,29 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask anything about Panda's Structure Optimizer: the caches, the stats, the coordinator, servers and modpacks. When someone's answer solves it, mark it as the answer so the next person finds it.
+
+        Found a bug or a crash? [Open an issue](https://github.com/Panda-s-Workshop/pandas-structure-optimizer/issues/new/choose) instead.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Panda's Structure Optimizer version
+      placeholder: 0.1.0
+    validations:
+      required: false
+
+  - type: input
+    id: mods
+    attributes:
+      label: Modpack or other mods, if they matter
+    validations:
+      required: false

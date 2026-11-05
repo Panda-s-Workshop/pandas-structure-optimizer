@@ -1,0 +1,34 @@
+plugins {
+    id "architectury-plugin" version "3.5.170"
+    id "dev.architectury.loom-no-remap" version "1.17.493" apply false
+    id "com.gradleup.shadow" version "9.6.1" apply false
+}
+
+architectury {
+    minecraft = rootProject.minecraft_version
+}
+
+// 26.1 is the first Minecraft without obfuscation: no mappings, nothing to remap
+subprojects {
+    apply plugin: "dev.architectury.loom-no-remap"
+
+    dependencies {
+        minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
+    }
+}
+
+allprojects {
+    apply plugin: "java"
+    apply plugin: "architectury-plugin"
+
+    base {
+        archivesName = rootProject.mod_id
+    }
+    version = rootProject.mod_version
+    group = rootProject.mod_group_id
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = "UTF-8"
+        options.release = rootProject.java_version as int
+    }
+}

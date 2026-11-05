@@ -1,0 +1,87 @@
+plugins {
+    id "com.gradleup.shadow"
+}
+
+architectury {
+    platformSetupLoomIde()
+    fabric()
+}
+
+loom {
+    accessWidenerPath = project(":common").loom.accessWidenerPath
+
+    // the dev runs' mod is both modules: Fabric Loader only looks for the access widener and data in the mod's own paths
+    mods {
+        main {
+            sourceSet sourceSets.main
+            sourceSet project(":common").sourceSets.main
+        }
+    }
+
+    // run folders beside the NeoForge ones at the repository root
+    runs {
+        client {
+            runDir "../run/fabric-client"
+        }
+        server {
+            runDir "../run/fabric-server"
+            programArgs "--nogui", "--port", "25619"
+        }
+    }
+}
+
+
+configurations {
+    common {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+    compileClasspath.extendsFrom common
+    runtimeClasspath.extendsFrom common
+    developmentFabric.extendsFrom common
+
+    shadowBundle {
+        canBeResolved = true
+        canBeConsumed = false
+    }
+}
+
+dependencies {
+    implementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+    api("net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}") { exclude group: "net.fabricmc", module: "fabric-loader" }
+
+    common(project(path: ":common")) { transitive = false }
+    shadowBundle(project(path: ":common", configuration: "transformProductionFabric")) { transitive = false }
+}
+
+processResources {
+    def props = [
+        version: project.version,
+        mod_id: rootProject.mod_id,
+        mod_name: rootProject.mod_name,
+        mod_description: rootProject.mod_description,
+        mod_license: rootProject.mod_license,
+        mod_authors: rootProject.mod_authors,
+        minecraft_version: rootProject.minecraft_version,
+        fabric_loader_version: rootProject.fabric_loader_version,
+        fabric_api_min: rootProject.fabric_api_min
+    ]
+    inputs.properties props
+    filesMatching("fabric.mod.json") {
+        expand props
+    }
+}
+
+// the released jar: common and Fabric classes together (nothing to remap since 26.1)
+shadowJar {
+    exclude "datapacks/**" // the test pack, for dev runs only
+    exclude "architectury.common.json"
+    configurations = [project.configurations.shadowBundle]
+    archiveClassifier = "fabric"
+}
+
+jar {
+    archiveClassifier = "dev"
+}
+
+assemble.dependsOn shadowJar

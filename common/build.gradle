@@ -1,0 +1,23 @@
+architectury {
+    common("fabric", "neoforge")
+}
+
+loom {
+    accessWidenerPath = file("src/main/resources/pandas_structure_optimizer.accesswidener")
+}
+
+dependencies {
+    // the Fabric loader brings the Mixin library (and @Environment) that common code compiles against
+    implementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
+    // MixinExtras' injectors (they compose with other mods' hooks on the same call); both loaders ship it at runtime
+    compileOnly "io.github.llamalad7:mixinextras-common:0.5.3"
+
+    testImplementation platform("org.junit:junit-bom:5.14.4")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+    testImplementation "com.google.code.gson:gson:2.14.0"
+}
+
+test {
+    useJUnitPlatform()
+}

@@ -1,0 +1,43 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      # gradle.properties pins a local JDK path (org.gradle.java.home); the user-home file takes precedence over it
+      - name: Point Gradle at the runner's JDK
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.java.home=$JAVA_HOME" >> ~/.gradle/gradle.properties
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and unit tests
+        run: ./gradlew build --stacktrace
+
+      - name: GameTests (NeoForge)
+        run: ./gradlew :neoforge:runGameTestServer --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pandas_structure_optimizer-${{ github.sha }}
+          path: |
+            neoforge/build/libs/*-neoforge.jar
+            fabric/build/libs/*-fabric.jar
+          if-no-files-found: error

@@ -1,0 +1,6 @@
+# LF in the repo whatever writes the file (Python on Windows writes CRLF by default)
+* text=auto eol=lf
+*.png binary
+*.ogg binary
+*.nbt binary
+*.jar binary
