@@ -157,7 +157,7 @@ public final class TemplateCache {
             return Optional.of(template);
         }
         boolean[] shared = new boolean[1];
-        Result result = cache.flight.run(key, () -> cache.upgrade(key, id, bytes, access), shared);
+        Result result = cache.flight.run(key, () -> cache.upgrade(key, id, bytes, access, false), shared);
         if (!shared[0]) return Optional.of(result.template());
         StructureTemplate template = new StructureTemplate();
         template.load(access.structopt$blockLookup(), result.fixed().copy());
@@ -178,7 +178,7 @@ public final class TemplateCache {
         String key = CacheKey.entry(id.toString(), CacheKey.sha256(bytes));
         if (index.get(key) != null || flight.isInFlight(key)) return false;
         try {
-            flight.run(key, () -> upgrade(key, id, bytes, (TemplateSourceAccessor) source));
+            flight.run(key, () -> upgrade(key, id, bytes, (TemplateSourceAccessor) source, true));
             return true;
         } catch (RuntimeException e) {
             return false;
@@ -211,7 +211,7 @@ public final class TemplateCache {
         }
     }
 
-    private Result upgrade(String key, Identifier id, byte[] bytes, TemplateSourceAccessor source) {
+    private Result upgrade(String key, Identifier id, byte[] bytes, TemplateSourceAccessor source, boolean builder) {
         CompoundTag raw;
         try {
             raw = NbtIo.readCompressed(new ByteArrayInputStream(bytes), NbtAccounter.unlimitedHeap());
@@ -225,8 +225,12 @@ public final class TemplateCache {
         } finally {
             Capture.end();
         }
-        Stats.TEMPLATE_MISSES.increment();
-        Stats.TEMPLATE_UPGRADE_MICROS.add(capture.micros);
+        if (builder) {
+            Stats.BUILDER_UPGRADED.increment();
+        } else {
+            Stats.TEMPLATE_MISSES.increment();
+            Stats.TEMPLATE_UPGRADE_MICROS.add(capture.micros);
+        }
         CompoundTag fixed = capture.fixed;
         if (fixed != null) store(key, id, fixed, capture.micros);
         return new Result(template, fixed != null ? fixed : template.save(new CompoundTag()));

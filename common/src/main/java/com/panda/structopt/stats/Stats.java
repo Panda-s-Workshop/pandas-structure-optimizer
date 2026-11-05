@@ -11,7 +11,10 @@ import java.util.concurrent.atomic.LongAdder;
 /** This session's counters, shown by {@code /structopt stats} and the periodic log line. Reset when a server starts. */
 public final class Stats {
     public static final LongAdder TEMPLATE_HITS = new LongAdder();
+    /** Templates upgraded because the game asked for them (not by the builder). */
     public static final LongAdder TEMPLATE_MISSES = new LongAdder();
+    /** Templates the background builder upgraded into the cache. */
+    public static final LongAdder BUILDER_UPGRADED = new LongAdder();
     public static final LongAdder TEMPLATE_AVOIDED_MICROS = new LongAdder();
     public static final LongAdder TEMPLATE_UPGRADE_MICROS = new LongAdder();
     public static final LongAdder TEMPLATE_LOADS = new LongAdder();
@@ -96,7 +99,7 @@ public final class Stats {
     }
 
     public static void reset() {
-        for (LongAdder a : List.of(TEMPLATE_HITS, TEMPLATE_MISSES, TEMPLATE_AVOIDED_MICROS, TEMPLATE_UPGRADE_MICROS, TEMPLATE_LOADS,
+        for (LongAdder a : List.of(TEMPLATE_HITS, TEMPLATE_MISSES, BUILDER_UPGRADED, TEMPLATE_AVOIDED_MICROS, TEMPLATE_UPGRADE_MICROS, TEMPLATE_LOADS,
                 TEMPLATE_SHARED_LOADS, START_HITS, START_MISSES, START_SHARED, START_UNSHAREABLE, AHEAD_COMPUTED, AHEAD_USED, AHEAD_SCANNED, AHEAD_PLAYER_SCANS, AHEAD_DROPPED,
                 PREFETCHED, HEIGHT_HITS, HEIGHT_MISSES, SPAWN_SKIPS, COORDINATOR_BLOCKED)) a.reset();
         BUILDER_DONE.set(0);

@@ -220,7 +220,7 @@ public final class Lookahead {
     private void consider(Scan s, Holder<StructureSet> set, StructurePlacement placement, ChunkGeneratorStructureState state, ChunkPos pos) {
         int dx = pos.x() - s.cx, dz = pos.z() - s.cz;
         int d = Math.max(Math.abs(dx), Math.abs(dz));
-        if (d < s.inner || d > s.outer || dx * s.vx + dz * s.vz < 0) return;
+        if (!Band.wanted(dx, dz, s.vx, s.vz, s.inner + 1, s.outer - s.inner - 1)) return;
         long mark = pos.pack() * 31 + System.identityHashCode(set.value()) + 17L * System.identityHashCode(s.level);
         if (!seen.add(mark)) return;
         ChunkHolder holder = s.level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.pack());

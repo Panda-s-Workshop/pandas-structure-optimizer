@@ -126,8 +126,10 @@ final class FeatureTests {
         ResourceManager resources = server.getResourceManager();
         ResourceManagerTemplateSource source = ((StructureTemplateManagerAccessor) server.getStructureTemplateManager()).structopt$resourceManagerSource();
         List<Identifier> files = new ArrayList<>(new TreeMap<>(FILES.listMatchingResources(resources)).keySet()).subList(0, 12);
+        long misses = Stats.TEMPLATE_MISSES.sum();
         for (Identifier file : files) cache.warm(FILES.fileToId(file), file, resources, source);
         cache.flush();
+        if (Stats.TEMPLATE_MISSES.sum() != misses) helper.fail("the builder's upgrades were counted as the game's misses");
         for (Identifier file : files) {
             byte[] bytes = bytes(helper, resources, file);
             if (!cache.contains(FILES.fileToId(file), bytes)) helper.fail(FILES.fileToId(file) + " is not in the cache after the builder step");

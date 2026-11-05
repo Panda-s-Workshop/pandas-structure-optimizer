@@ -48,7 +48,8 @@ public final class Report {
         out.add(cache == null ? Component.translatable(Texts.STATS_TEMPLATE_CACHE_OFF)
                 : Component.translatable(Texts.STATS_TEMPLATE_CACHE, cache.entries(), cache.bytes() >> 20, cache.ageHours()));
         out.add(Component.translatable(Texts.STATS_LOADS, Stats.TEMPLATE_LOADS.sum(), Stats.TEMPLATE_SHARED_LOADS.sum()));
-        out.add(Component.translatable(Texts.STATS_BUILDER, Stats.builderState, Stats.BUILDER_DONE.get(), Stats.BUILDER_TOTAL.get()));
+        out.add(Component.translatable(Texts.STATS_BUILDER, Stats.builderState, Stats.BUILDER_DONE.get(), Stats.BUILDER_TOTAL.get(),
+                Stats.BUILDER_UPGRADED.sum()));
         long[] kept = StartCache.size();
         out.add(Component.translatable(Texts.STATS_STARTS, Stats.START_HITS.sum(), Stats.START_MISSES.sum(), Stats.START_SHARED.sum(),
                 kept[0], kept[1] >> 20));
@@ -76,8 +77,8 @@ public final class Report {
 
     /** The periodic summary for the server log. */
     public static void logSummary() {
-        StructOpt.LOGGER.info("[structopt] templates {} cached / {} upgraded ({} s avoided); starts {} reused / {} computed / {} not shareable; ahead {} computed / {} used; heights {} hits; spawn skips {}",
-                Stats.TEMPLATE_HITS.sum(), Stats.TEMPLATE_MISSES.sum(), fmt(Stats.TEMPLATE_AVOIDED_MICROS.sum() / 1e6), Stats.START_HITS.sum(),
+        StructOpt.LOGGER.info("[structopt] templates {} cached / {} upgraded / {} by the builder ({} s avoided); starts {} reused / {} computed / {} not shareable; ahead {} computed / {} used; heights {} hits; spawn skips {}",
+                Stats.TEMPLATE_HITS.sum(), Stats.TEMPLATE_MISSES.sum(), Stats.BUILDER_UPGRADED.sum(), fmt(Stats.TEMPLATE_AVOIDED_MICROS.sum() / 1e6), Stats.START_HITS.sum(),
                 Stats.START_MISSES.sum(), Stats.START_UNSHAREABLE.sum(), Stats.AHEAD_COMPUTED.sum(), Stats.AHEAD_USED.sum(), Stats.HEIGHT_HITS.sum(), Stats.SPAWN_SKIPS.sum());
     }
 
