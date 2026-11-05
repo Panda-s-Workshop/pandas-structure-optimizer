@@ -3,6 +3,7 @@ package com.panda.structopt.start;
 import com.panda.structopt.StructOpt;
 import com.panda.structopt.config.StructOptConfig;
 import com.panda.structopt.coordinator.Coordinator;
+import com.panda.structopt.height.VanillaTerrain;
 import com.panda.structopt.stats.Stats;
 import com.panda.structopt.template.Pools;
 import java.util.ArrayDeque;
@@ -152,6 +153,7 @@ public final class Lookahead {
             if (speed < MIN_SPEED) continue;
             lastMoveNanos = now;
             ServerLevel level = p.level();
+            if (!VanillaTerrain.is(level.getChunkSource().getGenerator())) continue;
             ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
             ChunkPos c = p.chunkPosition();
             scans.addLast(new Scan(level, state.possibleStructureSets(), c.x(), c.z(), radius - 1, radius + config.lookaheadExtraChunks,
@@ -235,7 +237,7 @@ public final class Lookahead {
     /** Queues one candidate chunk of one set, past the queue cap (the dev parity harness queues a whole square this way). */
     public static boolean submitCandidate(ServerLevel level, Holder<StructureSet> set, ChunkPos pos, int distance, boolean checkDisk) {
         Lookahead l = instance;
-        if (l == null) return false;
+        if (l == null || !VanillaTerrain.is(level.getChunkSource().getGenerator())) return false;
         l.queued.incrementAndGet();
         l.executor.execute(l.new Job(level, set, pos, distance, checkDisk, l.sequence.getAndIncrement()));
         return true;

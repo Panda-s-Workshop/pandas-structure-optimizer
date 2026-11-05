@@ -7,6 +7,7 @@ import com.panda.structopt.config.StructOptConfig;
 import com.panda.structopt.coordinator.Coordinator;
 import com.panda.structopt.coordinator.CoordinatorRules;
 import com.panda.structopt.height.Heights;
+import com.panda.structopt.height.VanillaTerrain;
 import com.panda.structopt.mixin.StructureTemplateManagerAccessor;
 import com.panda.structopt.mixin.TemplateSourceAccessor;
 import com.panda.structopt.spawn.SpawnProbes;
@@ -60,7 +61,9 @@ import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
 import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -119,17 +122,23 @@ final class FeatureTests {
 
     // ---- 3.2 -------------------------------------------------------------------------------------------------------------
 
-    /** The builder's upgrade step leaves every template it is given in the disk cache. */
+    /**
+     * The builder's upgrade step leaves every template it is given in the disk cache, and its upgrades count as the builder's,
+     * never as the game's own misses. (The count is only exercised when the cache is cold, as on CI: a warm cache has nothing
+     * left to upgrade for these twelve.)
+     */
     static void cacheBuilderFills(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         TemplateCache cache = need(helper, TemplateCache.get(), "the template cache is off");
         ResourceManager resources = server.getResourceManager();
         ResourceManagerTemplateSource source = ((StructureTemplateManagerAccessor) server.getStructureTemplateManager()).structopt$resourceManagerSource();
         List<Identifier> files = new ArrayList<>(new TreeMap<>(FILES.listMatchingResources(resources)).keySet()).subList(0, 12);
-        long misses = Stats.TEMPLATE_MISSES.sum();
-        for (Identifier file : files) cache.warm(FILES.fileToId(file), file, resources, source);
+        long misses = Stats.TEMPLATE_MISSES.sum(), builder = Stats.BUILDER_UPGRADED.sum();
+        int upgraded = 0;
+        for (Identifier file : files) if (cache.warm(FILES.fileToId(file), file, resources, source)) upgraded++;
         cache.flush();
         if (Stats.TEMPLATE_MISSES.sum() != misses) helper.fail("the builder's upgrades were counted as the game's misses");
+        if (Stats.BUILDER_UPGRADED.sum() - builder < upgraded) helper.fail(upgraded + " upgrades, but the builder count grew by " + (Stats.BUILDER_UPGRADED.sum() - builder));
         for (Identifier file : files) {
             byte[] bytes = bytes(helper, resources, file);
             if (!cache.contains(FILES.fileToId(file), bytes)) helper.fail(FILES.fileToId(file) + " is not in the cache after the builder step");
@@ -257,7 +266,13 @@ final class FeatureTests {
         if (helper.getLevel().getServer().getPlayerList().getPlayer(player.getUUID()) == null) helper.fail("the test player isn't in the player list");
         Vec3 step = new Vec3(0.55, 0, 0.1);
         long before = Stats.AHEAD_PLAYER_SCANS.sum();
+        int[] ticks = {0};
+        // the test times out at 100 ticks: the player goes before that either way, so a failed run can't leave a mover behind
         helper.onEachTick(() -> {
+            if (++ticks[0] >= 95) {
+                removePlayer(helper, player);
+                return;
+            }
             player.setDeltaMovement(Vec3.ZERO);
             player.setKnownMovement(step);
         });
@@ -265,8 +280,84 @@ final class FeatureTests {
             helper.assertTrue(player.getDeltaMovement().horizontalDistance() < Lookahead.MIN_SPEED, "the test player has a server-side velocity");
             helper.assertTrue(Lookahead.movement(player).horizontalDistance() >= Lookahead.MIN_SPEED, "the lookahead doesn't see the player move");
             helper.assertTrue(Stats.AHEAD_PLAYER_SCANS.sum() > before, "no scan started for the moving player");
-            helper.getLevel().getServer().getPlayerList().remove(player);
+            removePlayer(helper, player);
         });
+    }
+
+    private static void removePlayer(GameTestHelper helper, ServerPlayer player) {
+        var list = helper.getLevel().getServer().getPlayerList();
+        if (list.getPlayer(player.getUUID()) != null) list.remove(player);
+    }
+
+    /**
+     * Starts are computed ahead, and heights cached, only on terrain built from Minecraft's own density functions: the vanilla
+     * overworld router and the flat test world pass; the same router with one mod-made density function swapped in does not.
+     */
+    static void vanillaTerrainCheck(GameTestHelper helper) {
+        RegistryAccess registries = helper.getLevel().registryAccess();
+        var settings = registries.lookupOrThrow(Registries.NOISE_SETTINGS).getOrThrow(NoiseGeneratorSettings.OVERWORLD);
+        var biomes = MultiNoiseBiomeSource.createFromPreset(registries.lookupOrThrow(Registries.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST)
+                .getOrThrow(MultiNoiseBiomeSourceParameterLists.OVERWORLD));
+        NoiseBasedChunkGenerator vanilla = new NoiseBasedChunkGenerator(biomes, settings);
+        if (!VanillaTerrain.is(vanilla)) helper.fail("the vanilla overworld counts as modded terrain");
+        if (!VanillaTerrain.is(helper.getLevel().getChunkSource().getGenerator())) helper.fail("the flat test world counts as modded terrain");
+        NoiseRouter router = settings.value().noiseRouter();
+        DensityFunction foreign = new ForeignDensity(router.finalDensity());
+        try {
+            NoiseRouter modded = withComponent(router, "finalDensity", foreign);
+            NoiseGeneratorSettings moddedSettings = withComponent(settings.value(), "noiseRouter", modded);
+            NoiseBasedChunkGenerator generator = new NoiseBasedChunkGenerator(biomes, Holder.direct(moddedSettings));
+            if (VanillaTerrain.is(generator)) helper.fail("a router with a mod-made density function counts as vanilla");
+            if (Heights.allowed(generator)) helper.fail("the height cache would serve modded terrain");
+        } catch (ReflectiveOperationException e) {
+            helper.fail("couldn't build the modded router: " + e);
+        }
+        helper.succeed();
+    }
+
+    /** A copy of a record with one component replaced, through its canonical constructor. */
+    @SuppressWarnings("unchecked")
+    private static <R extends Record> R withComponent(R record, String name, Object value) throws ReflectiveOperationException {
+        var components = record.getClass().getRecordComponents();
+        Class<?>[] types = new Class<?>[components.length];
+        Object[] args = new Object[components.length];
+        boolean found = false;
+        for (int i = 0; i < components.length; i++) {
+            types[i] = components[i].getType();
+            boolean match = components[i].getName().equals(name);
+            found |= match;
+            args[i] = match ? value : components[i].getAccessor().invoke(record);
+        }
+        if (!found) throw new NoSuchFieldException(name);
+        return (R) record.getClass().getDeclaredConstructor(types).newInstance(args);
+    }
+
+    /** Stands for a terrain mod's own density function type: it wraps a vanilla one, but its class is not Minecraft's. */
+    private record ForeignDensity(DensityFunction inner) implements DensityFunction {
+        @Override
+        public net.minecraft.world.level.levelgen.densityfunction.DensitySampler compileSampler(DensityFunction.CompileContext context) {
+            return inner.compileSampler(context);
+        }
+
+        @Override
+        public DensityFunction rewriteChildren(net.minecraft.world.level.levelgen.densityfunction.DfRewriteRule rule) {
+            return new ForeignDensity(rule.rewrite(inner));
+        }
+
+        @Override
+        public net.minecraft.util.Interval range() {
+            return inner.range();
+        }
+
+        @Override
+        public int domainAxes() {
+            return inner.domainAxes();
+        }
+
+        @Override
+        public com.mojang.serialization.MapCodec<? extends DensityFunction> codec() {
+            return inner.codec();
+        }
     }
 
     // ---- 3.8 -------------------------------------------------------------------------------------------------------------

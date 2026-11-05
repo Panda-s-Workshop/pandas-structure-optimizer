@@ -35,6 +35,7 @@ public final class StructOptGameTests {
         FUNCTIONS.register("start_cache_copy", () -> FeatureTests::startCacheCopy);
         FUNCTIONS.register("lookahead_moving_player", () -> FeatureTests::lookaheadMovingPlayer);
         FUNCTIONS.register("height_cache_equivalence", () -> FeatureTests::heightCacheEquivalence);
+        FUNCTIONS.register("vanilla_terrain_check", () -> FeatureTests::vanillaTerrainCheck);
         FUNCTIONS.register("spawn_probe_skips", () -> FeatureTests::spawnProbeSkips);
         FUNCTIONS.register("stats_command", () -> FeatureTests::statsCommand);
         FUNCTIONS.register("cache_commands", () -> FeatureTests::cacheCommands);

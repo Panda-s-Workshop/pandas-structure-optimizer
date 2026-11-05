@@ -40,7 +40,7 @@ public final class Heights {
     public static boolean allowed(ChunkGenerator generator) {
         if (!enabled) return false;
         Identifier type = BuiltInRegistries.CHUNK_GENERATOR.getKey(generator.codec());
-        return type != null && StructOptConfig.get().heightCacheGenerators.contains(type.toString());
+        return type != null && StructOptConfig.get().heightCacheGenerators.contains(type.toString()) && VanillaTerrain.is(generator);
     }
 
     public static @Nullable HeightCache create(Object randomState, int minY, int height) {
