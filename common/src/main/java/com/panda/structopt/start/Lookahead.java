@@ -83,15 +83,18 @@ public final class Lookahead {
         final ServerLevel level;
         final List<Holder<StructureSet>> sets;
         final int cx, cz, inner, outer;
-        final double vx, vz;
+        final double fx, fz, vx, vz;
         int set, rx, rz;
         boolean started;
 
-        Scan(ServerLevel level, List<Holder<StructureSet>> sets, int cx, int cz, int inner, int outer, double vx, double vz) {
+        Scan(ServerLevel level, List<Holder<StructureSet>> sets, int cx, int cz, double fx, double fz, int inner, int outer, double vx,
+                double vz) {
             this.level = level;
             this.sets = sets;
             this.cx = cx;
             this.cz = cz;
+            this.fx = fx;
+            this.fz = fz;
             this.inner = inner;
             this.outer = outer;
             this.vx = vx;
@@ -156,8 +159,9 @@ public final class Lookahead {
             if (!VanillaTerrain.is(level.getChunkSource().getGenerator())) continue;
             ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
             ChunkPos c = p.chunkPosition();
-            scans.addLast(new Scan(level, state.possibleStructureSets(), c.x(), c.z(), radius - 1, radius + config.lookaheadExtraChunks,
-                    v.x / speed, v.z / speed));
+            double fx = Math.clamp(p.getX() / 16 - c.x(), 0, 1), fz = Math.clamp(p.getZ() / 16 - c.z(), 0, 1);
+            scans.addLast(new Scan(level, state.possibleStructureSets(), c.x(), c.z(), fx, fz, radius - 1,
+                    radius + config.lookaheadExtraChunks, v.x / speed, v.z / speed));
             Stats.AHEAD_PLAYER_SCANS.increment();
             while (scans.size() > 64) scans.removeFirst();
         }
@@ -222,7 +226,7 @@ public final class Lookahead {
     private void consider(Scan s, Holder<StructureSet> set, StructurePlacement placement, ChunkGeneratorStructureState state, ChunkPos pos) {
         int dx = pos.x() - s.cx, dz = pos.z() - s.cz;
         int d = Math.max(Math.abs(dx), Math.abs(dz));
-        if (!Band.wanted(dx, dz, s.vx, s.vz, s.inner + 1, s.outer - s.inner - 1)) return;
+        if (!Band.wanted(dx, dz, s.fx, s.fz, s.vx, s.vz,s.inner + 1, s.outer - s.inner - 1)) return;
         long mark = pos.pack() * 31 + System.identityHashCode(set.value()) + 17L * System.identityHashCode(s.level);
         if (!seen.add(mark)) return;
         ChunkHolder holder = s.level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.pack());

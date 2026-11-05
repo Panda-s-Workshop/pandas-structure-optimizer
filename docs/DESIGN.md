@@ -64,7 +64,13 @@ working.
 - A player counts as moving from the positions its client sends (the server-side velocity of a player stays zero).
 - For a moving player, the mod looks at the band of chunks just past the ones the chunk system already needs. That is the
   view distance plus the radius at which full chunks need structure starts, extended `lookaheadExtraChunks` along the
-  direction of travel.
+  direction of travel. Only chunks that square will cover if the player keeps going straight are taken; the square follows
+  the chunk the player is in, so where in that chunk the player stands counts. A turning player gets a new scan on the next
+  cycle.
+- Only on terrain built from Minecraft's own code: the generator and biome source classes and every density function of the
+  noise router (followed through sums, splines and registry references), data pack terrain included. A terrain mod's own
+  types may answer heights differently on another thread, and a start computed ahead would then not be the one the chunk
+  worker computes. On such a world (UltraTerraForged, for one) the mod logs it once and computes nothing ahead.
 - In that band it finds each structure set's candidate chunks from the seed. A random-spread set has one per spacing
   region. Only candidates that pass the set's own placement check are kept, at most `lookaheadScanCapPerTick` checks per
   tick. Chunks already past the structure step, loaded or saved, are skipped.
@@ -78,8 +84,9 @@ working.
 ### Height cache
 
 Terrain-height answers of the vanilla noise generator (`getBaseHeight`) are kept in a fixed-size cache per dimension,
-keyed by column and heightmap type. It is on only for generator types in `heightCacheGenerators`. These must return the
-same answer for the same column; only `minecraft:noise` is listed.
+keyed by column and heightmap type. It is on only for generator types in `heightCacheGenerators`, and only on terrain
+built from Minecraft's own code (the same rule as for starts computed ahead). These must return the same answer
+for the same column; only `minecraft:noise` is listed.
 
 ### Spawn checks skip unfinished chunks
 

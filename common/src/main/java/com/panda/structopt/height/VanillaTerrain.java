@@ -15,7 +15,8 @@ import net.minecraft.world.level.levelgen.densityfunction.DfRewriteRule;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Whether a generator's terrain is built only from Minecraft's own density functions. Those are pure: the same column gives the
+ * Whether a generator's terrain is built only from Minecraft's own code: its generator and biome source classes and every density
+ * function of its noise router. Those are pure: the same column gives the
  * same height on any thread, at any time. A noise generator whose router contains a mod's own density function types (a terrain
  * mod such as UltraTerraForged) may not be: on the bench, starts computed ahead on the mod's threads came out 1-2 blocks higher
  * or lower than the chunk worker's. Starts computed ahead and the height cache are only used where this is true. Data pack
@@ -32,20 +33,22 @@ public final class VanillaTerrain {
         String foreign = foreignDensityFunction(generator);
         boolean vanilla = foreign == null;
         if (!vanilla) {
-            StructOpt.LOGGER.info("Terrain of {} uses the density function {}: structure starts are not computed ahead there and the "
+            StructOpt.LOGGER.info("Terrain of {} uses {}, which is not Minecraft's own: structure starts are not computed ahead there and the "
                     + "height cache is off, so the world stays exactly as without this mod", generator.getClass().getSimpleName(), foreign);
         }
         KNOWN.put(generator, vanilla);
         return vanilla;
     }
 
-    /** The class name of the first density function outside Minecraft's own, or null when there is none. */
+    /**
+     * The class name of the first piece of terrain code outside Minecraft's own (the generator, its biome source, or a density
+     * function of its router), or null when there is none.
+     */
     static @Nullable String foreignDensityFunction(ChunkGenerator generator) {
-        if (!(generator instanceof NoiseBasedChunkGenerator noise)) {
-            // Minecraft's other generators (flat, debug) are pure; another mod's generator is not known to be
-            String name = generator.getClass().getName();
-            return name.startsWith("net.minecraft.") ? null : name;
-        }
+        // Another mod's generator, a subclass of Minecraft's included, or its biome source (starts check biomes) is not known to be pure
+        if (!minecraft(generator)) return generator.getClass().getName();
+        if (!minecraft(generator.getBiomeSource())) return generator.getBiomeSource().getClass().getName();
+        if (!(generator instanceof NoiseBasedChunkGenerator noise)) return null; // flat, debug
         NoiseRouter router = noise.generatorSettings().value().noiseRouter();
         Set<DensityFunction> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         String[] found = new String[1];
@@ -53,7 +56,7 @@ public final class VanillaTerrain {
             @Override
             public DensityFunction rewrite(DensityFunction f) {
                 if (found[0] != null || !seen.add(f)) return f;
-                if (!f.getClass().getName().startsWith("net.minecraft.")) {
+                if (!minecraft(f)) {
                     found[0] = f.getClass().getName();
                     return f;
                 }
@@ -69,5 +72,9 @@ public final class VanillaTerrain {
             return "unreadable router (" + e + ")";
         }
         return found[0];
+    }
+
+    private static boolean minecraft(Object o) {
+        return o.getClass().getName().startsWith("net.minecraft.");
     }
 }

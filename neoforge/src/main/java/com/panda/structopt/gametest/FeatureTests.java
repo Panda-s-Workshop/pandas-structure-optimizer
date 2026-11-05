@@ -55,6 +55,7 @@ import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LevelHeightAccessor;
+import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSource;
 import net.minecraft.world.level.biome.MultiNoiseBiomeSourceParameterLists;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
@@ -64,6 +65,7 @@ import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.densityfunction.DensityFunction;
+import net.minecraft.world.level.levelgen.densityfunction.DensityFunctions;
 import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -133,6 +135,7 @@ final class FeatureTests {
         ResourceManager resources = server.getResourceManager();
         ResourceManagerTemplateSource source = ((StructureTemplateManagerAccessor) server.getStructureTemplateManager()).structopt$resourceManagerSource();
         List<Identifier> files = new ArrayList<>(new TreeMap<>(FILES.listMatchingResources(resources)).keySet()).subList(0, 12);
+        CacheBuilder.stop(); // the background builder started with the server would add its own upgrades to the count
         long misses = Stats.TEMPLATE_MISSES.sum(), builder = Stats.BUILDER_UPGRADED.sum();
         int upgraded = 0;
         for (Identifier file : files) if (cache.warm(FILES.fileToId(file), file, resources, source)) upgraded++;
@@ -302,16 +305,42 @@ final class FeatureTests {
         if (!VanillaTerrain.is(vanilla)) helper.fail("the vanilla overworld counts as modded terrain");
         if (!VanillaTerrain.is(helper.getLevel().getChunkSource().getGenerator())) helper.fail("the flat test world counts as modded terrain");
         NoiseRouter router = settings.value().noiseRouter();
-        DensityFunction foreign = new ForeignDensity(router.finalDensity());
+        // Buried the way a data pack would reference it: inside a sum, behind a registry holder
+        DensityFunction foreign = DensityFunctions.add(router.finalDensity(),
+                new DensityFunctions.HolderHolder(Holder.direct(new ForeignDensity(DensityFunctions.zero()))));
         try {
             NoiseRouter modded = withComponent(router, "finalDensity", foreign);
             NoiseGeneratorSettings moddedSettings = withComponent(settings.value(), "noiseRouter", modded);
             NoiseBasedChunkGenerator generator = new NoiseBasedChunkGenerator(biomes, Holder.direct(moddedSettings));
-            if (VanillaTerrain.is(generator)) helper.fail("a router with a mod-made density function counts as vanilla");
+            if (VanillaTerrain.is(generator)) helper.fail("a router with a mod-made density function deep inside counts as vanilla");
             if (Heights.allowed(generator)) helper.fail("the height cache would serve modded terrain");
         } catch (ReflectiveOperationException e) {
             helper.fail("couldn't build the modded router: " + e);
         }
+        NoiseBasedChunkGenerator subclass = new NoiseBasedChunkGenerator(biomes, settings) {
+            @Override
+            public com.mojang.serialization.MapCodec<? extends net.minecraft.world.level.chunk.ChunkGenerator> codec() {
+                return null; // never saved
+            }
+        };
+        if (VanillaTerrain.is(subclass)) helper.fail("a mod's subclass of the noise generator counts as vanilla");
+        BiomeSource moddedBiomes = new BiomeSource() {
+            @Override
+            protected com.mojang.serialization.MapCodec<? extends BiomeSource> codec() {
+                return null; // never saved
+            }
+
+            @Override
+            protected java.util.stream.Stream<Holder<net.minecraft.world.level.biome.Biome>> collectPossibleBiomes() {
+                return biomes.possibleBiomes().stream();
+            }
+
+            @Override
+            public net.minecraft.world.level.biome.BiomeResolver createResolver(net.minecraft.world.level.biome.Climate.Sampler sampler) {
+                return biomes.createResolver(sampler);
+            }
+        };
+        if (VanillaTerrain.is(new NoiseBasedChunkGenerator(moddedBiomes, settings))) helper.fail("a mod's biome source counts as vanilla");
         helper.succeed();
     }
 

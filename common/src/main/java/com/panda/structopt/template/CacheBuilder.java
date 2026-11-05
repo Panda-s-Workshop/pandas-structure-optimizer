@@ -34,6 +34,8 @@ import org.jspecify.annotations.Nullable;
 public final class CacheBuilder {
     private static final FileToIdConverter FILES = new FileToIdConverter("structure", ".nbt");
     private static final long BUSY_WAIT_MILLIS = 500;
+    /** Guards {@link #current} and the builder's stats, so a run can't report after it stopped being current. Never held while waiting. */
+    private static final Object STATE = new Object();
     private static volatile @Nullable Run current;
 
     private static final class Run {
@@ -45,7 +47,21 @@ public final class CacheBuilder {
         }
 
         void state(String state) {
-            if (isCurrent()) Stats.builderState = state;
+            synchronized (STATE) {
+                if (isCurrent()) Stats.builderState = state;
+            }
+        }
+
+        void total(int total) {
+            synchronized (STATE) {
+                if (isCurrent()) Stats.BUILDER_TOTAL.set(total);
+            }
+        }
+
+        void checked() {
+            synchronized (STATE) {
+                if (isCurrent()) Stats.BUILDER_DONE.incrementAndGet();
+            }
         }
     }
 
@@ -57,8 +73,10 @@ public final class CacheBuilder {
         if (cache == null) return;
         StructOptConfig config = StructOptConfig.get();
         Run run = new Run();
-        current = run;
-        Stats.BUILDER_DONE.set(0);
+        synchronized (STATE) {
+            current = run;
+            Stats.BUILDER_DONE.set(0);
+        }
         Thread lister = new Thread(() -> run(run, server, cache, config), "StructOpt template cache builder");
         lister.setDaemon(true);
         lister.setPriority(Thread.MIN_PRIORITY);
@@ -67,10 +85,13 @@ public final class CacheBuilder {
     }
 
     public static synchronized void stop() {
-        Run run = current;
-        if (run == null) return;
-        if (!"done".equals(Stats.builderState)) Stats.builderState = "stopped";
-        current = null;
+        Run run;
+        synchronized (STATE) {
+            run = current;
+            if (run == null) return;
+            if (!"done".equals(Stats.builderState)) Stats.builderState = "stopped";
+            current = null;
+        }
         run.stop.set(true);
         for (Thread t : run.threads) t.interrupt();
         for (Thread t : run.threads) {
@@ -100,7 +121,7 @@ public final class CacheBuilder {
             for (Identifier file : FILES.listMatchingResources(resources).keySet()) set.add(FILES.fileToId(file));
             List<Identifier> ids = List.copyOf(set);
             if (run.stop.get()) return;
-            if (run.isCurrent()) Stats.BUILDER_TOTAL.set(ids.size());
+            run.total(ids.size());
             run.state("running");
             StructOpt.LOGGER.info("Template cache builder: checking {} templates in the background on {} thread(s)", ids.size(),
                     config.templateCacheBuilderThreads);
@@ -142,7 +163,7 @@ public final class CacheBuilder {
                 if (run.stop.get()) return;
                 throw e;
             }
-            if (run.isCurrent()) Stats.BUILDER_DONE.incrementAndGet();
+            run.checked();
         }
     }
 }
