@@ -4,14 +4,14 @@
 
 A Minecraft 26.3 mod for NeoForge (26.3.0.89) and Fabric (Fabric API 0.161.0), Java 25. It runs on the server, which
 in single player is the game itself; players joining a server don't need it.
-The store page link will go here at release.
+Download it from [CurseForge](https://www.curseforge.com/minecraft/mc-mods/pandas-structure-optimizer) or from the
+[GitHub releases](https://github.com/Panda-s-Workshop/pandas-structure-optimizer/releases). Modpack makers: use the
+CurseForge download.
 
 Structures generate several times faster in big modpacks, and the world stays the same. Most of the time a pack spends
 on structures goes into upgrading structure templates to the current game version, every session again, and into
 working out the same structure starts more than once. This mod keeps what it has already worked out and computes the
 rest before the chunks are needed. It needs no datapack changes, and it runs with and without C2ME.
-
-Work in progress: nothing is released yet.
 
 ## What it does
 
